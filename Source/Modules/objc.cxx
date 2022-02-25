@@ -1601,7 +1601,12 @@ void OBJECTIVEC::emitProxyClassConstructor(Node *n) {
     // Director connection
     Printv(directorconnect, "", NIL);
     if (feature_director) {
-        Printf(directorconnect, "if (self) %s((void *)swigCPtr, self); ", Swig_name_wrapper("swigDirectorConnect"));
+        Node *parent = parentNode(n);
+        String *classname = Swig_class_name(parent);
+        String *director_connect_name = NewStringf("swigDirector_%s_Connect", classname);
+        Printf(directorconnect, "if (self) %s((void *)swigCPtr, self); ", Swig_name_wrapper(director_connect_name));
+        Delete(classname);
+        Delete(director_connect_name);
     }
     
     // Insert the objcconstructor typemap
@@ -1740,7 +1745,10 @@ void OBJECTIVEC::emitProxyClass(Node *n) {
     // Director disconnection
     Printv(directordisconnect, "", NIL);
     if (feature_director) {
-        Printf(directordisconnect, "%s((void *)swigCPtr);", Swig_name_wrapper("swigDirectorDisconnect"));
+        String *sym_name = Getattr(n, "sym:name");
+        String *director_disconnect_name = NewStringf("swigDirector_%s_Disconnect", sym_name);
+        Printf(directordisconnect, "%s((void *)swigCPtr);", Swig_name_wrapper(director_disconnect_name));
+        Delete(director_disconnect_name);
     }
 
 
@@ -2395,7 +2403,7 @@ int OBJECTIVEC::classDirectorMethod(Node *n, Node *parent, String *super) {
         Printf(w->code, "::id swigjobj = swig_get_self();\n");
         Printf(w->code, "BOOL swigmethodoverridden = NO;\n");
         Printf(w->code, "if (swigjobj) {\n");
-        Printf(w->code, "  swigmethodoverridden = [swigjobj methodForSelector:@selector(%s)] != [%s instanceMethodForSelector:@selector(%s)];\n", method_signature, classname, method_signature);
+        Printf(w->code, "  swigmethodoverridden = [swigjobj methodForSelector:@selector(%s)] != [objc_getClass(\"%s\") instanceMethodForSelector:@selector(%s)];\n", method_signature, classname, method_signature);
         Printf(w->code, "}\n");
         Printf(w->code, "if (!swigmethodoverridden) {\n");
 
@@ -2713,11 +2721,16 @@ void OBJECTIVEC::emitDirectorExtraMethods(Node *n) {
 
     // Output the director connect method:
     String *norm_name = SwigType_namestr(Getattr(n, "name"));
-    String *swig_director_connect = Swig_name_wrapper("swigDirectorConnect");
-    String *swig_director_disconnect = Swig_name_wrapper("swigDirectorDisconnect");
     String *sym_name = Getattr(n, "sym:name");
+    String *director_connect_name = NewStringf("swigDirector_%s_Connect", sym_name);
+    String *director_disconnect_name = NewStringf("swigDirector_%s_Disconnect", sym_name);
+    String *swig_director_connect = Swig_name_wrapper(director_connect_name);
+    String *swig_director_disconnect = Swig_name_wrapper(director_disconnect_name);
     String *dirClassName = directorClassName(n);
     String *smartptr = Getattr(n, "feature:smartptr");
+    
+    Delete(director_connect_name);
+    Delete(director_disconnect_name);
 
     Printf(wrap_mm_code, "void %s(void* objarg, id objcdirector) {\n", swig_director_connect);
     if (Len(smartptr)) {
